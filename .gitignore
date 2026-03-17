@@ -7,3 +7,4 @@ dist/
 *.swo
 *.kate-swp
 .kiro/
+.venv/

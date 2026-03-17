@@ -33,7 +33,7 @@ Repository = "https://github.com/mohammedalkebsi/vpm"
 Issues = "https://github.com/mohammedalkebsi/vpm/issues"
 
 [project.scripts]
-vpm = "vpm.vpm:main"
+vpm = "vpm.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["vpm*"]
