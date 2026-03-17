@@ -28,9 +28,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mohammedalkebsi/vpm"
-Repository = "https://github.com/mohammedalkebsi/vpm"
-Issues = "https://github.com/mohammedalkebsi/vpm/issues"
+Homepage = "https://github.com/Nao-30/vpm"
+Repository = "https://github.com/Nao-30/vpm"
+Issues = "https://github.com/Nao-30/vpm/issues"
 
 [project.scripts]
 vpm = "vpm.cli:main"

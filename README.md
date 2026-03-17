@@ -543,7 +543,7 @@ All state is persisted in `~/.local/share/vpm/vpm-lock.json`. This JSON file con
   "_meta": {
     "version": "1.0.0",
     "updated_at": "2024-01-15T10:30:00",
-    "user": "mohammed.k",
+    "user": "deploy",
     "hostname": "my-vps"
   },
   "apps": {
@@ -699,7 +699,7 @@ VPM Installation Summary
 ============================================================
 App: docker (Docker Engine)
 Started: 2024-01-15T10:31:00
-User: mohammed.k
+User: deploy
 Host: my-vps
 Total Steps: 5
 ============================================================
@@ -1165,7 +1165,7 @@ requires: docker
 **DON'T: Hardcode user-specific paths**
 ```
 # Bad
-- run: cp file /home/mohammed.k/apps/
+- run: cp file /home/deploy/apps/
 ```
 ```
 # Good
