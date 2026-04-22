@@ -5,5 +5,5 @@ A robust, interactive package/script orchestrator for VPS environments.
 PyPI package: vpmx | CLI command: vpm
 """
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __app_name__ = "vpm"

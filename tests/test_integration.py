@@ -143,4 +143,5 @@ class TestVersion:
     def test_version_output(self):
         rc, out = run_vpm("version")
         assert rc == 0
-        assert "1.1.0" in out
+        from vpm import __version__
+        assert __version__ in out

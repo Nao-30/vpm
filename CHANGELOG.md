@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-04-22
+
+### Added
+- `additional_allowed_domains` config key — extend default allowlist without replacing it
+- `vpm run --audit-only` flag — security scan remote manifests without executing
+- Integration tests (install, audit, rollback, status, doctor, version)
+- `py.typed` marker for PEP 561 type checker support
+
+### Changed
+- `upgrade.sh` rewritten for `pip install vpmx` (replaces old pipx flow)
+
+### Fixed
+- Stale single-file architecture references in troubleshooting docs
+
+## [1.1.0] - 2026-04-22
+
 ### Added
 - Security scanner with static pattern detection (`vpm audit`)
 - Auto-scan before `vpm install` with configurable severity levels
@@ -38,5 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `vpm init` manifest template generator
 - `vpm setup` for PATH installation (user and global)
 
-[Unreleased]: https://github.com/Nao-30/vpm/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Nao-30/vpm/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/Nao-30/vpm/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/Nao-30/vpm/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Nao-30/vpm/releases/tag/v1.0.0
