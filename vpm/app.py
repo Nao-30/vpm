@@ -596,6 +596,11 @@ class VPM:
 
         scanner.display_findings(findings)
 
+        displayed = scanner.filter_display(findings)
+        if not displayed:
+            UI.success("No security issues found at current scan level.")
+            return
+
         if scanner.should_block(findings):
             print()
             UI.error("Blocked: Critical security issues found. Resolve before installing.")
