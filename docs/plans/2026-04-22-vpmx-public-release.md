@@ -90,7 +90,7 @@ In `upgrade.sh`, the script already uses `$REPO_DIR` for the local path and `pip
 - [ ] **Step 4: Verify the build works**
 
 ```bash
-cd /home/mohammed.k/geeky/vpm
+cd /path/to/vpm
 python3 -m build --sdist --no-isolation 2>&1 || python3 setup.py sdist 2>&1
 # If python3 -m build not available:
 python3 -c "import setuptools; print('setuptools OK')"
@@ -576,7 +576,7 @@ class SecurityScanner:
 - [ ] **Step 2: Verify the module imports correctly**
 
 ```bash
-cd /home/mohammed.k/geeky/vpm
+cd /path/to/vpm
 python3 -c "from vpm.scanner import SecurityScanner, Severity, SecurityFinding; print('scanner OK')"
 ```
 
@@ -699,7 +699,7 @@ Add `audit` to the dispatch dict in `main()`:
 - [ ] **Step 4: Verify audit command works**
 
 ```bash
-cd /home/mohammed.k/geeky/vpm
+cd /path/to/vpm
 python3 -m vpm audit --help
 # Create a test manifest with a risky command and scan it
 cat > /tmp/test-risky.yaml << 'EOF'
@@ -835,7 +835,7 @@ Apply this pattern to ALL places where multiline blocks start and end in the par
 - [ ] **Step 3: Verify parser handles rollback**
 
 ```bash
-cd /home/mohammed.k/geeky/vpm
+cd /path/to/vpm
 cat > /tmp/test-rollback.yaml << 'EOF'
 [test_app] Test rollback parsing
 - label: Install nginx
@@ -1105,7 +1105,7 @@ In `cmd_status`, add to the `status_display` dict:
 - [ ] **Step 6: Verify rollback command works**
 
 ```bash
-cd /home/mohammed.k/geeky/vpm
+cd /path/to/vpm
 python3 -m vpm rollback --help
 ```
 
@@ -1287,7 +1287,7 @@ Add to dispatch dict in `main()`:
 - [ ] **Step 3: Verify run command works**
 
 ```bash
-cd /home/mohammed.k/geeky/vpm
+cd /path/to/vpm
 python3 -m vpm run --help
 ```
 
@@ -2579,7 +2579,7 @@ class TestResolveOrder:
 - [ ] **Step 6: Verify tests run**
 
 ```bash
-cd /home/mohammed.k/geeky/vpm
+cd /path/to/vpm
 pip install pytest --quiet 2>/dev/null || true
 python3 -m pytest tests/ -v
 ```
@@ -2626,7 +2626,7 @@ Also add `--skip-security` to the `install` command completions in all three she
 - [ ] **Step 2: Verify completions generate without error**
 
 ```bash
-cd /home/mohammed.k/geeky/vpm
+cd /path/to/vpm
 python3 -c "from vpm.completions import Completions; print(Completions.zsh_completion()[:200])"
 python3 -c "from vpm.completions import Completions; print(Completions.bash_completion()[:200])"
 python3 -c "from vpm.completions import Completions; print(Completions.fish_completion()[:200])"
@@ -2825,7 +2825,7 @@ git commit -m "docs: update CONTRIBUTING.md with new modules and testing instruc
 - [ ] **Step 1: Run full test suite**
 
 ```bash
-cd /home/mohammed.k/geeky/vpm
+cd /path/to/vpm
 python3 -m pytest tests/ -v
 ```
 
