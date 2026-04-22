@@ -180,7 +180,7 @@ class Executor:
         summary_log = app_log_dir / f"summary_{now.strftime('%Y%m%d_%H%M%S')}.log"
 
         with open(summary_log, "w") as summary_f:
-            summary_f.write(f"VPM Installation Summary\n")
+            summary_f.write("VPM Installation Summary\n")
             summary_f.write(f"{'=' * 60}\n")
             summary_f.write(f"App: {record.display_name}\n")
             summary_f.write(f"Started: {now.isoformat()}\n")
@@ -189,7 +189,6 @@ class Executor:
             summary_f.write(f"Total Steps: {total}\n")
             summary_f.write(f"{'=' * 60}\n\n")
 
-            all_success = True
             for step in record.steps:
                 if self._interrupted:
                     UI.warning("Skipping remaining steps due to interrupt.")
@@ -200,7 +199,7 @@ class Executor:
                 # Skip already completed steps (resume mode)
                 if is_resume and step.status == StepStatus.SUCCESS.value:
                     UI.step(step.index + 1, total, f"{step.label}")
-                    UI.success(f"Already completed — skipping")
+                    UI.success("Already completed — skipping")
                     summary_f.write(f"[SKIPPED/OK] Step {step.index + 1}: {step.label}\n")
                     continue
 
@@ -209,7 +208,6 @@ class Executor:
 
                 success = self._run_step(step, app_log_dir, summary_f)
                 if not success:
-                    all_success = False
                     # Skip remaining steps
                     for remaining in record.steps[step.index + 1:]:
                         if remaining.status != StepStatus.SUCCESS.value:
@@ -273,7 +271,7 @@ class Executor:
 
         try:
             with open(log_file, "w") as lf:
-                lf.write(f"VPM Step Execution Log\n")
+                lf.write("VPM Step Execution Log\n")
                 lf.write(f"{'─' * 60}\n")
                 lf.write(f"Step: {step.index + 1} — {step.label}\n")
                 lf.write(f"Started: {now.isoformat()}\n")

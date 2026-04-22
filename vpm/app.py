@@ -2,10 +2,7 @@
 
 import argparse
 import datetime
-import json
 import os
-import platform
-import pwd
 import shutil
 import subprocess
 import sys
@@ -14,13 +11,11 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from . import __version__
-from .completions import Completions
 from .config import Config
 from .executor import Executor
 from .lockfile import LockFile
 from .manifest import ManifestApp, ManifestParser
-from .models import AppRecord, AppStatus, StepRecord, StepStatus
+from .models import AppRecord, AppStatus, StepStatus
 from .scanner import SecurityScanner
 from .style import Style
 from .ui import UI
@@ -407,7 +402,7 @@ class VPM:
                     )
             return
 
-        safe = Config._safe_name(args.app)
+        Config._safe_name(args.app)
         record = self.lock.get_app(args.app)
         if not record:
             UI.error(f"App '{args.app}' not found.")
@@ -695,7 +690,7 @@ class VPM:
         except urllib.error.HTTPError as e:
             if e.code == 404 and source.startswith("github:") and "/main/" in url:
                 url = url.replace("/main/", "/master/")
-                UI.dim(f"  main not found, trying master...")
+                UI.dim("  main not found, trying master...")
                 try:
                     req = urllib.request.Request(url, headers={"User-Agent": "vpm/1.1.0"})
                     with urllib.request.urlopen(req, timeout=30) as resp:

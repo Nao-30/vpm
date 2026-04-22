@@ -25,7 +25,7 @@ class LockFile:
         if self.path.exists():
             try:
                 raw = json.loads(self.path.read_text())
-                meta = raw.get("_meta", {})
+                raw.get("_meta", {})
                 apps = raw.get("apps", {})
                 self._data = {}
                 for key, val in apps.items():

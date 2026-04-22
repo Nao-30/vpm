@@ -14,7 +14,6 @@ from pathlib import Path
 from . import __version__
 from .app import VPM
 from .completions import Completions
-from .config import Config
 from .style import Style
 from .ui import UI
 
@@ -80,7 +79,7 @@ class _VPMExtended(VPM):
                 if str(target_dir) not in path_dirs:
                     rc_file = self._get_shell_rc(shell_name)
                     if rc_file:
-                        line = f'\nexport PATH="$HOME/.local/bin:$PATH"\n'
+                        line = '\nexport PATH="$HOME/.local/bin:$PATH"\n'
                         rc_content = rc_file.read_text() if rc_file.exists() else ""
                         if ".local/bin" not in rc_content:
                             with open(rc_file, "a") as f:
@@ -254,9 +253,9 @@ class _VPMExtended(VPM):
                 rc_content = zshrc.read_text()
                 if str(target_dir) not in rc_content:
                     with open(zshrc, "a") as f:
-                        f.write(f"\n# VPM completions\n")
+                        f.write("\n# VPM completions\n")
                         f.write(f"fpath=({target_dir} $fpath)\n")
-                        f.write(f"autoload -Uz compinit && compinit\n")
+                        f.write("autoload -Uz compinit && compinit\n")
                     UI.success(f"Added fpath to {zshrc}")
                 else:
                     UI.info(f"Completion path already in {zshrc}")
@@ -275,7 +274,7 @@ class _VPMExtended(VPM):
                 rc_content = bashrc.read_text()
                 if str(comp_file) not in rc_content and "vpm" not in rc_content:
                     with open(bashrc, "a") as f:
-                        f.write(f"\n# VPM completions\n")
+                        f.write("\n# VPM completions\n")
                         f.write(f"[ -f {comp_file} ] && source {comp_file}\n")
                     UI.success(f"Added source to {bashrc}")
             installed = True

@@ -109,7 +109,7 @@ class UI:
             cls.dim("(no data)")
             return
 
-        col_count = len(headers)
+        len(headers)
         col_widths = [len(h) for h in headers]
         for row in rows:
             for i, cell in enumerate(row):
