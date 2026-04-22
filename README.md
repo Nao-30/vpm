@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="VPM Logo" width="160">
+  <img src="https://raw.githubusercontent.com/Nao-30/vpm/main/assets/logo.png" alt="VPM Logo" width="160">
 </p>
 
 <h1 align="center">VPM — Virtual Package Manager</h1>

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vpmx"
-version = "1.2.0"
+version = "1.2.1"
 description = "Virtual Package Manager — resumable, trackable script orchestration for VPS and local environments"
 readme = "README.md"
 license = "MIT"
