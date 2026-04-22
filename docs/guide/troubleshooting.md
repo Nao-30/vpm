@@ -71,27 +71,25 @@ vpm install --yes
 ## Architecture
 
 ```
-vpm.py (single file, ~1500 lines)
-├── Style          — ANSI color/formatting with terminal detection
-├── UI             — Rich terminal components (headers, tables, progress bars, prompts)
-├── Config         — XDG-compliant path management
-├── LockFile       — Atomic JSON state persistence
-├── StepRecord     — Per-step tracking dataclass
-├── AppRecord      — Per-app tracking dataclass
-├── ManifestParser — Custom format parser (no YAML dependency)
-├── ManifestApp    — Parsed app representation with dependencies
-├── SecurityScanner— Static analysis and URL checking for manifest commands
-├── Executor       — PTY-based command execution with logging
-├── Completions    — Shell completion generators (zsh, bash, fish)
-├── VPM            — Main CLI application with all command handlers
-└── main()         — Argument parsing and dispatch
+vpm/                    — Python package
+├── style.py           — ANSI color/formatting with terminal detection
+├── ui.py              — Rich terminal components (headers, tables, progress bars, prompts)
+├── config.py          — XDG-compliant path management
+├── models.py          — StepRecord, AppRecord, StepStatus, AppStatus dataclasses
+├── lockfile.py        — Atomic JSON state persistence
+├── manifest.py        — Custom format parser (no YAML dependency) + ManifestApp
+├── scanner.py         — Security scanning: static analysis and URL checking
+├── executor.py        — PTY-based command execution with logging + rollback
+├── completions.py     — Shell completion generators (zsh, bash, fish)
+├── app.py             — Main application with all command handlers
+└── cli.py             — Argument parsing, dispatch, and bootstrap
 ```
 
 **Key design decisions**:
 
 | Decision | Rationale |
 |---|---|
-| Single file | Easy to deploy to any VPS — just copy one file |
+| Modular package | Clean separation of concerns, testable components |
 | No pip dependencies | Nothing to install, no virtual environment needed |
 | Custom manifest format | Avoids PyYAML dependency while being human-readable |
 | PTY execution | Full interactive support (debconf, ncurses, sudo prompts) |
@@ -103,4 +101,4 @@ vpm.py (single file, ~1500 lines)
 
 ---
 
-*VPM v1.0.0 — Built for humans who manage servers, and the AI agents who help them.*
+*VPM v1.1.0 — Built for humans who manage servers, and the AI agents who help them.*

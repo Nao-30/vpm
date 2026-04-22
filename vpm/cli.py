@@ -560,6 +560,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("source", help="URL, github:user/repo, or local file path")
     p_run.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompts")
     p_run.add_argument("--dry-run", "-n", action="store_true", help="Preview without executing")
+    p_run.add_argument("--audit-only", action="store_true", help="Security scan only, don't execute")
 
     # setup
     p_setup = subparsers.add_parser(

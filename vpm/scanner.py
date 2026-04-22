@@ -173,14 +173,16 @@ class SecurityScanner:
         self.level = sec.get("level", "warn")
         self.check_urls = sec.get("check_urls", False)
         self.vt_api_key = sec.get("virustotal_api_key")
-        self.allowed_domains = set(sec.get("allowed_domains", [
+        default_domains = {
             "github.com", "raw.githubusercontent.com",
             "download.docker.com", "deb.nodesource.com",
             "packages.microsoft.com", "dl.google.com",
             "archive.ubuntu.com", "deb.debian.org",
             "pypi.org", "files.pythonhosted.org",
             "registry.npmjs.org", "rubygems.org",
-        ]))
+        }
+        self.allowed_domains = set(sec.get("allowed_domains", default_domains))
+        self.allowed_domains.update(sec.get("additional_allowed_domains", []))
 
     def scan_apps(self, apps: list) -> list[SecurityFinding]:
         """Scan a list of ManifestApp objects. Returns all findings."""

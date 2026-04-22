@@ -728,6 +728,9 @@ class VPM:
         else:
             UI.success("Security scan clean.")
 
+        if getattr(args, "audit_only", False):
+            return
+
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".yaml", prefix="vpm_remote_", delete=False
         ) as tmp:
