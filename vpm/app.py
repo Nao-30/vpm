@@ -9,6 +9,9 @@ import pwd
 import shutil
 import subprocess
 import sys
+import tempfile
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from . import __version__
@@ -18,6 +21,7 @@ from .executor import Executor
 from .lockfile import LockFile
 from .manifest import ManifestApp, ManifestParser
 from .models import AppRecord, AppStatus, StepRecord, StepStatus
+from .scanner import SecurityScanner
 from .style import Style
 from .ui import UI
 
@@ -146,6 +150,19 @@ class VPM:
                         f" (requires: {', '.join(app.requires)})", Style.DIM
                     )
                 print(f"    {Style.s(str(i + 1), Style.CYAN)}. {app.name}{dep_info}")
+
+        # Security scan
+        if not getattr(args, "skip_security", False):
+            scanner = SecurityScanner(self.config)
+            findings = scanner.scan_apps(apps_to_install)
+            if findings:
+                scanner.display_findings(findings)
+                if scanner.should_block(findings):
+                    UI.error("Blocked by security scanner. Use --skip-security to override.")
+                    return
+                if scanner.should_warn(findings) and not args.yes:
+                    if not UI.confirm("Security warnings found. Continue anyway?"):
+                        return
 
         # Dry run
         if args.dry_run:
@@ -305,6 +322,7 @@ class VPM:
                     AppStatus.FAILED.value: Style.s("✖ Failed", Style.RED),
                     AppStatus.IN_PROGRESS.value: Style.s("… Running", Style.BLUE),
                     AppStatus.PENDING.value: Style.s("○ Pending", Style.DIM),
+                    AppStatus.ROLLED_BACK.value: Style.s("⏪ Rolled Back", Style.MAGENTA),
                 }.get(record.status, record.status)
 
                 updated = ""
@@ -555,3 +573,180 @@ class VPM:
 
         self.lock.remove_app(args.app)
         UI.success(f"Reset tracking for '{args.app}'.")
+
+    # ── AUDIT ─────────────────────────────────────────────────────────────
+
+    def cmd_audit(self, args):
+        """Scan a manifest for security risks without executing."""
+        UI.header("Security Audit", "🛡️")
+
+        manifest_path = args.file or self._find_manifest()
+        if not manifest_path:
+            UI.error("No manifest file found.")
+            return
+
+        UI.info(f"Scanning: {manifest_path}")
+        apps = ManifestParser.parse_file(Path(manifest_path))
+
+        if not apps:
+            UI.warning("No apps found in manifest.")
+            return
+
+        scanner = SecurityScanner(self.config)
+        findings = scanner.scan_apps(apps)
+
+        if not findings:
+            UI.success("No security issues found.")
+            return
+
+        scanner.display_findings(findings)
+
+        if scanner.should_block(findings):
+            print()
+            UI.error("Blocked: Critical security issues found. Resolve before installing.")
+            sys.exit(1)
+
+    # ── ROLLBACK ──────────────────────────────────────────────────────────
+
+    def cmd_rollback(self, args):
+        """Rollback a previously installed app."""
+        UI.header("Rollback", "⏪")
+
+        record = self.lock.get_app(args.app)
+        if not record:
+            UI.error(f"App '{args.app}' not found in tracking.")
+            UI.info("Run 'vpm list' to see tracked apps.")
+            return
+
+        has_rollback = any(s.rollback_command for s in record.steps)
+        if not has_rollback:
+            UI.error(f"No rollback commands defined for '{args.app}'.")
+            UI.info("Add 'rollback:' fields to your manifest steps to enable rollback.")
+            return
+
+        succeeded_with_rb = [
+            s for s in record.steps
+            if s.status == StepStatus.SUCCESS.value and s.rollback_command
+        ]
+        succeeded_without = [
+            s for s in record.steps
+            if s.status == StepStatus.SUCCESS.value and not s.rollback_command
+        ]
+
+        if not succeeded_with_rb:
+            UI.warning("No succeeded steps with rollback commands to undo.")
+            return
+
+        UI.info(f"Steps to rollback ({len(succeeded_with_rb)}):")
+        for s in reversed(succeeded_with_rb):
+            UI.dim(f"  {s.index + 1}. {s.label}")
+
+        if succeeded_without:
+            UI.warning(f"{len(succeeded_without)} succeeded step(s) have no rollback command and will be skipped.")
+
+        if args.dry_run:
+            self.executor.rollback_app(record, dry_run=True)
+            return
+
+        if not UI.confirm("Proceed with rollback?"):
+            return
+
+        self.executor.rollback_app(record)
+
+    # ── RUN (remote manifest) ────────────────────────────────────────────
+
+    def cmd_run(self, args):
+        """Fetch and execute a remote manifest."""
+        UI.header("Run Remote Manifest", "🌐")
+
+        source = args.source
+
+        if source.startswith(("http://", "https://")):
+            url = source
+        elif source.startswith("github:"):
+            parts = source[7:]
+            segments = parts.split("/", 2)
+            if len(segments) < 2:
+                UI.error("GitHub shorthand: github:user/repo or github:user/repo/path/file.yaml")
+                return
+            user, repo = segments[0], segments[1]
+            path = segments[2] if len(segments) > 2 else "vpm-manifest.yaml"
+            url = f"https://raw.githubusercontent.com/{user}/{repo}/main/{path}"
+        elif Path(source).exists():
+            UI.info(f"Local file detected. Running as: vpm install --file {source}")
+            args.file = source
+            args.apps = []
+            args.force = False
+            args.dry_run = getattr(args, "dry_run", False)
+            args.yes = getattr(args, "yes", False)
+            args.skip_security = False
+            self.cmd_install(args)
+            return
+        else:
+            UI.error(f"Unknown source: {source}")
+            UI.info("Supported: https://..., github:user/repo, ./local-file.yaml")
+            return
+
+        UI.info(f"Fetching: {url}")
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "vpm/1.1.0"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                content = resp.read().decode("utf-8")
+        except urllib.error.HTTPError as e:
+            if e.code == 404 and source.startswith("github:") and "/main/" in url:
+                url = url.replace("/main/", "/master/")
+                UI.dim(f"  main not found, trying master...")
+                try:
+                    req = urllib.request.Request(url, headers={"User-Agent": "vpm/1.1.0"})
+                    with urllib.request.urlopen(req, timeout=30) as resp:
+                        content = resp.read().decode("utf-8")
+                except Exception as e2:
+                    UI.error(f"Failed to fetch: {e2}")
+                    return
+            else:
+                UI.error(f"Failed to fetch: {e}")
+                return
+        except Exception as e:
+            UI.error(f"Failed to fetch: {e}")
+            return
+
+        UI.success(f"Fetched {len(content)} bytes")
+
+        apps = ManifestParser.parse_string(content)
+        if not apps:
+            UI.error("No apps found in remote manifest.")
+            return
+
+        UI.info(f"Found {len(apps)} app(s): {', '.join(a.name for a in apps)}")
+
+        # Mandatory security scan for remote manifests
+        scanner = SecurityScanner(self.config)
+        findings = scanner.scan_apps(apps)
+        if findings:
+            scanner.display_findings(findings)
+            if scanner.should_block(findings):
+                UI.error("Blocked: Critical security issues in remote manifest.")
+                return
+            if not getattr(args, "yes", False):
+                if not UI.confirm("Security warnings found in remote manifest. Continue?"):
+                    return
+        else:
+            UI.success("Security scan clean.")
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yaml", prefix="vpm_remote_", delete=False
+        ) as tmp:
+            tmp.write(content)
+            manifest_path = tmp.name
+
+        try:
+            args.file = manifest_path
+            args.apps = []
+            args.force = False
+            args.skip_security = True  # Already scanned
+            self.cmd_install(args)
+        finally:
+            try:
+                os.unlink(manifest_path)
+            except OSError:
+                pass

@@ -3,14 +3,18 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vpm"
-version = "1.0.0"
-description = "Virtual Package Manager — robust script orchestration for VPS environments"
+name = "vpmx"
+version = "1.1.0"
+description = "Virtual Package Manager — resumable, trackable script orchestration for VPS and local environments"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
-authors = [{ name = "Mohammed Alkebsi" }]
-keywords = ["vps", "orchestration", "package-manager", "devops", "automation"]
+authors = [{ name = "Mohammed A. Al-Kebsi", email = "mohammed.k@mohammed-alkebsi.dev" }]
+keywords = [
+    "vps", "orchestration", "automation", "devops",
+    "script-runner", "shell", "deployment", "server-setup",
+    "crash-recovery", "interactive", "manifest",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -25,12 +29,14 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: System :: Installation/Setup",
     "Topic :: System :: Systems Administration",
+    "Topic :: Utilities",
 ]
 
 [project.urls]
 Homepage = "https://github.com/Nao-30/vpm"
 Repository = "https://github.com/Nao-30/vpm"
 Issues = "https://github.com/Nao-30/vpm/issues"
+Changelog = "https://github.com/Nao-30/vpm/blob/main/CHANGELOG.md"
 
 [project.scripts]
 vpm = "vpm.cli:main"

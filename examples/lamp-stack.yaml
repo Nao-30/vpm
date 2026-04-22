@@ -1,0 +1,86 @@
+# ═══════════════════════════════════════════════════════
+# VPM Manifest: LAMP Stack (Linux, Apache, MySQL, PHP)
+# Target OS: Ubuntu 22.04+ / Debian 12+
+# ═══════════════════════════════════════════════════════
+#
+# Usage:
+#   vpm install --file lamp-stack.yaml
+#
+# After installation:
+#   - MySQL root password is set during interactive setup
+#   - Configure virtual hosts in /etc/apache2/sites-available/
+#   - PHP info page at http://localhost/info.php (remove in production!)
+#
+
+[apache] Apache Web Server
+- label: Install Apache
+  run: sudo apt-get update -y && sudo apt-get install -y apache2
+  rollback: |
+    sudo systemctl stop apache2
+    sudo apt-get remove -y apache2
+
+- label: Enable and start Apache
+  run: |
+    sudo systemctl enable apache2
+    sudo systemctl start apache2
+    sudo systemctl status apache2 --no-pager
+  rollback: |
+    sudo systemctl stop apache2
+    sudo systemctl disable apache2
+
+- label: Enable mod_rewrite
+  run: |
+    sudo a2enmod rewrite
+    sudo systemctl restart apache2
+
+- label: Verify Apache
+  run: curl -sf http://localhost > /dev/null && echo "Apache responding"
+
+[mysql] MySQL Server
+requires: apache
+
+- label: Install MySQL
+  run: sudo apt-get install -y mysql-server
+  rollback: |
+    sudo systemctl stop mysql
+    sudo apt-get remove -y mysql-server
+
+- label: Start MySQL
+  run: |
+    sudo systemctl enable mysql
+    sudo systemctl start mysql
+    sudo systemctl status mysql --no-pager
+  rollback: |
+    sudo systemctl stop mysql
+    sudo systemctl disable mysql
+
+- label: Secure MySQL installation
+  run: sudo mysql_secure_installation
+
+- label: Verify MySQL
+  run: sudo mysql -e "SELECT VERSION();" && echo "MySQL running"
+
+[php] PHP with Apache module
+requires: apache, mysql
+
+- label: Install PHP and common extensions
+  run: |
+    sudo apt-get install -y \
+      php libapache2-mod-php php-mysql \
+      php-curl php-json php-mbstring php-xml php-zip
+  rollback: |
+    sudo apt-get remove -y php libapache2-mod-php php-mysql \
+      php-curl php-json php-mbstring php-xml php-zip
+
+- label: Restart Apache for PHP
+  run: sudo systemctl restart apache2
+
+- label: Create PHP info page
+  run: |
+    echo "<?php phpinfo(); ?>" | sudo tee /var/www/html/info.php > /dev/null
+    echo "PHP info page created at http://localhost/info.php"
+    echo "WARNING: Remove this file in production!"
+  rollback: sudo rm -f /var/www/html/info.php
+
+- label: Verify PHP
+  run: php -v && curl -sf http://localhost/info.php | head -5

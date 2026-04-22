@@ -24,15 +24,16 @@ vpm/
 ├── models.py            # Data models (StepRecord, AppRecord, enums)
 ├── lockfile.py          # Atomic JSON state persistence
 ├── manifest.py          # Manifest file parser
+├── scanner.py           # Security scanning and URL analysis
 ├── executor.py          # PTY-based command execution
 ├── completions.py       # Shell completion generators
-├── app.py               # Core commands (install, status, logs, retry, reset)
+├── app.py               # Core commands (install, status, logs, retry, reset, audit, rollback, run)
 ├── cli.py               # Entry point, arg parser, setup/doctor/version commands
 ```
 
 Dependency flow (one-directional):
 ```
-style → ui → config → models → lockfile → manifest → executor → completions → app → cli
+style → ui → config → models → lockfile → manifest → scanner → executor → completions → app → cli
 ```
 
 ## Guidelines
@@ -46,9 +47,10 @@ style → ui → config → models → lockfile → manifest → executor → co
 
 1. Fork the repo and create a branch from `main`
 2. Make your changes
-3. Test locally: `python3 -m vpm doctor` and run through the core commands
-4. Commit with a clear message
-5. Open a PR against `main`
+3. Run tests: `pip install pytest && python -m pytest tests/ -v`
+4. Test locally: `python3 -m vpm doctor` and run through the core commands
+5. Commit with a clear message
+6. Open a PR against `main`
 
 ## Reporting Issues
 

@@ -1,0 +1,26 @@
+# VPM (vpmx on PyPI)
+# Resumable shell command orchestrator for VPS/local environments
+# Install: pip install vpmx | CLI: vpm
+# Python 3.10+, zero dependencies
+
+## Manifest format (NOT standard YAML):
+# [app_name] description
+# requires: dep1, dep2
+# - label: Step name
+#   run: command
+#   rollback: undo command
+# Multi-line: run: | (indented block follows)
+
+## Key rules:
+# snake_case app names, always use label:, idempotent steps
+# $HOME not ~, sudo explicit, no cd as separate step
+# requires: for deps, verification step last per app
+
+## Commands:
+# vpm install [apps] [--file F] [--dry-run] [--yes] [--force] [--skip-security]
+# vpm audit [--file F]
+# vpm run <url|github:user/repo> [--yes] [--dry-run]
+# vpm rollback <app> [--dry-run]
+# vpm status [app] | vpm list | vpm logs <app> [--latest|--step N|--follow]
+# vpm retry <app> | vpm reset <app|--all> [--clean-logs]
+# vpm init [path] | vpm setup [--user|--global] | vpm doctor | vpm completions

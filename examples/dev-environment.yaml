@@ -1,0 +1,82 @@
+# ═══════════════════════════════════════════════════════
+# VPM Manifest: Developer Environment Setup
+# Target OS: Ubuntu 22.04+ / Debian 12+
+# ═══════════════════════════════════════════════════════
+#
+# Usage:
+#   vpm install --file dev-environment.yaml
+#
+
+[base_tools] Essential CLI tools
+- label: Update package lists
+  run: sudo apt-get update -y
+
+- label: Install essential tools
+  run: |
+    sudo apt-get install -y \
+      curl wget git htop vim unzip jq tree \
+      build-essential software-properties-common \
+      libssl-dev libffi-dev zlib1g-dev \
+      libbz2-dev libreadline-dev libsqlite3-dev
+
+- label: Verify tools
+  run: git --version && curl --version | head -1 && jq --version
+
+[python_dev] Python via pyenv
+requires: base_tools
+
+- label: Install pyenv
+  run: |
+    curl -fsSL https://pyenv.run | bash
+    export PYENV_ROOT="$HOME/.pyenv"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"
+  rollback: rm -rf $HOME/.pyenv
+
+- label: Install Python 3.12
+  run: |
+    export PYENV_ROOT="$HOME/.pyenv"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"
+    pyenv install 3.12 --skip-existing
+    pyenv global 3.12
+
+- label: Verify Python
+  run: |
+    export PYENV_ROOT="$HOME/.pyenv"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"
+    python --version
+    pip --version
+
+[node_dev] Node.js via NVM
+requires: base_tools
+
+- label: Install NVM and Node.js LTS
+  run: |
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+    nvm install --lts
+    nvm alias default node
+  rollback: rm -rf $HOME/.nvm
+
+- label: Verify Node.js
+  run: |
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+    node --version
+    npm --version
+
+[rust_dev] Rust via rustup
+requires: base_tools
+
+- label: Install Rust
+  run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+  rollback: rustup self uninstall -y
+
+- label: Verify Rust
+  run: |
+    source $HOME/.cargo/env
+    rustc --version
+    cargo --version

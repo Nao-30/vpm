@@ -9,7 +9,7 @@ class Completions:
     """Generate shell completions for bash, zsh, and fish."""
 
     COMMANDS = [
-        "init", "install", "status", "list", "logs", "retry",
+        "init", "install", "audit", "run", "rollback", "status", "list", "logs", "retry",
         "reset", "setup", "doctor", "completions", "version", "help"
     ]
 
@@ -26,6 +26,9 @@ class Completions:
                 commands=(
                     'init:Initialize a new VPM workspace with manifest template'
                     'install:Install apps from manifest file or CLI'
+                    'audit:Scan manifest for security risks without executing'
+                    'run:Fetch and execute a remote manifest'
+                    'rollback:Rollback a previously installed app'
                     'status:Show installation status of all tracked apps'
                     'list:List all managed apps and their states'
                     'logs:View or tail logs for an app'
@@ -53,6 +56,7 @@ class Completions:
                                     '--file[Manifest file to use]:file:_files' \\
                                     '--force[Force reinstallation]' \\
                                     '--dry-run[Show what would be done without executing]' \\
+                                    '--skip-security[Skip security scan]' \\
                                     '*:app name:'
                                 ;;
                             init)
@@ -72,6 +76,32 @@ if p.exists():
 " 2>/dev/null)"}})
                                 fi
                                 _describe -t apps 'installed app' apps
+                                ;;
+                            rollback)
+                                local -a apps
+                                if [[ -f "$HOME/.local/share/vpm/vpm-lock.json" ]]; then
+                                    apps=(${{(f)"$(python3 -c "
+import json, pathlib
+p = pathlib.Path.home() / '.local/share/vpm/vpm-lock.json'
+if p.exists():
+    d = json.loads(p.read_text())
+    for k in d.get('apps', {{}}):
+        print(k)
+" 2>/dev/null)"}})
+                                fi
+                                _arguments \\
+                                    '--dry-run[Preview rollback without executing]' \\
+                                    '1:app name:($apps)'
+                                ;;
+                            audit)
+                                _arguments \\
+                                    '--file[Manifest file to scan]:file:_files'
+                                ;;
+                            run)
+                                _arguments \\
+                                    '--yes[Skip confirmation prompts]' \\
+                                    '--dry-run[Preview without executing]' \\
+                                    '1:source:'
                                 ;;
                             setup)
                                 _arguments \\
@@ -113,7 +143,7 @@ if p.exists():
                 case "${{COMP_WORDS[1]}}" in
                     install)
                         if [[ "$cur" == -* ]]; then
-                            COMPREPLY=( $(compgen -W "--file --force --dry-run" -- "$cur") )
+                            COMPREPLY=( $(compgen -W "--file --force --dry-run --skip-security --yes" -- "$cur") )
                         elif [[ "$prev" == "--file" ]]; then
                             COMPREPLY=( $(compgen -f -- "$cur") )
                         fi
@@ -121,7 +151,7 @@ if p.exists():
                     init)
                         COMPREPLY=( $(compgen -d -- "$cur") )
                         ;;
-                    logs|retry|reset|status)
+                    logs|retry|reset|status|rollback)
                         local apps
                         if [[ -f "$HOME/.local/share/vpm/vpm-lock.json" ]]; then
                             apps=$(python3 -c "
@@ -132,7 +162,25 @@ if p.exists():
     print(' '.join(d.get('apps', {{}}).keys()))
 " 2>/dev/null)
                         fi
-                        COMPREPLY=( $(compgen -W "$apps" -- "$cur") )
+                        if [[ "$cur" == -* ]]; then
+                            case "${{COMP_WORDS[1]}}" in
+                                rollback) COMPREPLY=( $(compgen -W "--dry-run" -- "$cur") ) ;;
+                            esac
+                        else
+                            COMPREPLY=( $(compgen -W "$apps" -- "$cur") )
+                        fi
+                        ;;
+                    audit)
+                        if [[ "$cur" == -* ]]; then
+                            COMPREPLY=( $(compgen -W "--file" -- "$cur") )
+                        elif [[ "$prev" == "--file" ]]; then
+                            COMPREPLY=( $(compgen -f -- "$cur") )
+                        fi
+                        ;;
+                    run)
+                        if [[ "$cur" == -* ]]; then
+                            COMPREPLY=( $(compgen -W "--yes --dry-run" -- "$cur") )
+                        fi
                         ;;
                     setup)
                         COMPREPLY=( $(compgen -W "--global --user" -- "$cur") )
@@ -163,6 +211,9 @@ if p.exists():
         descs = {
             "init": "Initialize a new VPM workspace",
             "install": "Install apps from manifest",
+            "audit": "Scan manifest for security risks",
+            "run": "Fetch and execute a remote manifest",
+            "rollback": "Rollback a previously installed app",
             "status": "Show installation status",
             "list": "List all managed apps",
             "logs": "View logs for an app",
@@ -184,6 +235,17 @@ if p.exists():
             "complete -c vpm -n '__fish_seen_subcommand_from install' -l file -d 'Manifest file' -rF",
             "complete -c vpm -n '__fish_seen_subcommand_from install' -l force -d 'Force reinstall'",
             "complete -c vpm -n '__fish_seen_subcommand_from install' -l dry-run -d 'Dry run'",
+            "complete -c vpm -n '__fish_seen_subcommand_from install' -l skip-security -d 'Skip security scan'",
+            "",
+            "# audit subcommand options",
+            "complete -c vpm -n '__fish_seen_subcommand_from audit' -l file -d 'Manifest file' -rF",
+            "",
+            "# run subcommand options",
+            "complete -c vpm -n '__fish_seen_subcommand_from run' -l yes -d 'Skip prompts'",
+            "complete -c vpm -n '__fish_seen_subcommand_from run' -l dry-run -d 'Preview only'",
+            "",
+            "# rollback subcommand options",
+            "complete -c vpm -n '__fish_seen_subcommand_from rollback' -l dry-run -d 'Preview rollback'",
             "",
             "# setup subcommand options",
             "complete -c vpm -n '__fish_seen_subcommand_from setup' -l global -d 'Install globally'",

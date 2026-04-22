@@ -18,6 +18,7 @@ class AppStatus(str, enum.Enum):
     COMPLETED = "completed"
     PARTIAL = "partial"
     FAILED = "failed"
+    ROLLED_BACK = "rolled_back"
 
 
 @dataclass
@@ -33,6 +34,9 @@ class StepRecord:
     log_file: str | None = None
     error_summary: str | None = None
     command_hash: str | None = None
+    rollback_command: str | None = None
+    rollback_status: str | None = None
+    rollback_log_file: str | None = None
 
     def to_dict(self) -> dict:
         return {k: v for k, v in asdict(self).items()}

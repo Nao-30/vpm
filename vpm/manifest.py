@@ -64,6 +64,7 @@ class ManifestParser:
         in_multiline = False
         multiline_indent = 0
         multiline_lines: list[str] = []
+        multiline_target = "command"  # "command" or "rollback"
 
         lines = content.split("\n")
         i = 0
@@ -73,11 +74,16 @@ class ManifestParser:
 
             # Skip empty lines and comments (but not inside multiline)
             if in_multiline:
+                # Check if this line is a step-level key (label/run/rollback) — ends multiline
+                step_key_match = re.match(r"^\s+(label|run|rollback):\s*(.*)", line, re.IGNORECASE) if line else None
                 # Check if this line is still part of the multiline block
-                if line and not line[0].isspace() and stripped and not stripped.startswith("#"):
+                if step_key_match or (line and not line[0].isspace() and stripped and not stripped.startswith("#")):
                     # End of multiline
                     if current_step is not None:
-                        current_step["command"] = "\n".join(multiline_lines).strip()
+                        if multiline_target == "rollback":
+                            current_step["rollback"] = "\n".join(multiline_lines).strip()
+                        else:
+                            current_step["command"] = "\n".join(multiline_lines).strip()
                     in_multiline = False
                     multiline_lines = []
                     # Don't increment i, re-process this line
@@ -139,8 +145,8 @@ class ManifestParser:
                 rest = step_match.group(1).strip()
                 current_step = {"label": "", "command": ""}
 
-                # Check for label: or run:
-                kv = re.match(r"^(label|run):\s*(.*)", rest, re.IGNORECASE)
+                # Check for label: or run: or rollback:
+                kv = re.match(r"^(label|run|rollback):\s*(.*)", rest, re.IGNORECASE)
                 if kv:
                     key = kv.group(1).lower()
                     val = kv.group(2).strip()
@@ -151,8 +157,17 @@ class ManifestParser:
                             in_multiline = True
                             multiline_indent = len(line) - len(line.lstrip()) + 2
                             multiline_lines = []
+                            multiline_target = "command"
                         else:
                             current_step["command"] = val
+                    elif key == "rollback":
+                        if val == "|":
+                            in_multiline = True
+                            multiline_indent = len(line) - len(line.lstrip()) + 2
+                            multiline_lines = []
+                            multiline_target = "rollback"
+                        else:
+                            current_step["rollback"] = val
                 else:
                     # Simple format: - command here
                     current_step["command"] = rest
@@ -174,9 +189,9 @@ class ManifestParser:
                     i += 1
                     continue
 
-            # Continuation keys (label: or run:) for current step
+            # Continuation keys (label:, run:, or rollback:) for current step
             if current_step is not None:
-                kv = re.match(r"^\s+(label|run):\s*(.*)", line)
+                kv = re.match(r"^\s+(label|run|rollback):\s*(.*)", line)
                 if kv:
                     key = kv.group(1).lower()
                     val = kv.group(2).strip()
@@ -187,8 +202,17 @@ class ManifestParser:
                             in_multiline = True
                             multiline_indent = len(line) - len(line.lstrip()) + 2
                             multiline_lines = []
+                            multiline_target = "command"
                         else:
                             current_step["command"] = val
+                    elif key == "rollback":
+                        if val == "|":
+                            in_multiline = True
+                            multiline_indent = len(line) - len(line.lstrip()) + 2
+                            multiline_lines = []
+                            multiline_target = "rollback"
+                        else:
+                            current_step["rollback"] = val
                     i += 1
                     continue
 
@@ -196,7 +220,10 @@ class ManifestParser:
 
         # Finalize multiline if still open
         if in_multiline and current_step is not None:
-            current_step["command"] = "\n".join(multiline_lines).strip()
+            if multiline_target == "rollback":
+                current_step["rollback"] = "\n".join(multiline_lines).strip()
+            else:
+                current_step["command"] = "\n".join(multiline_lines).strip()
 
         # Save last step and app
         if current_step is not None:

@@ -463,6 +463,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--yes", "-y", action="store_true",
         help="Skip confirmation prompts",
     )
+    p_install.add_argument(
+        "--skip-security", action="store_true",
+        help="Skip security scan before execution (not recommended)",
+    )
 
     # status
     p_status = subparsers.add_parser(
@@ -521,6 +525,42 @@ def build_parser() -> argparse.ArgumentParser:
         "--clean-logs", action="store_true",
         help="Also delete log files",
     )
+
+    # audit
+    p_audit = subparsers.add_parser(
+        "audit",
+        help="Scan a manifest for security risks without executing",
+        description="Analyze manifest commands for dangerous patterns, suspicious URLs, "
+                     "and security anti-patterns.",
+    )
+    p_audit.add_argument(
+        "--file", "-f", metavar="FILE",
+        help="Path to manifest file (default: auto-discover)",
+    )
+
+    # rollback
+    p_rollback = subparsers.add_parser(
+        "rollback",
+        help="Rollback a previously installed app using defined rollback commands",
+        description="Run rollback commands in reverse order for steps that succeeded. "
+                     "Only steps with 'rollback:' defined in the manifest can be undone.",
+    )
+    p_rollback.add_argument("app", help="App name to rollback")
+    p_rollback.add_argument(
+        "--dry-run", "-n", action="store_true",
+        help="Show what would be rolled back without executing",
+    )
+
+    # run
+    p_run = subparsers.add_parser(
+        "run",
+        help="Fetch and execute a remote manifest",
+        description="Download a manifest from a URL or GitHub repo, scan for security "
+                     "issues, and execute. Security scanning is mandatory for remote manifests.",
+    )
+    p_run.add_argument("source", help="URL, github:user/repo, or local file path")
+    p_run.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompts")
+    p_run.add_argument("--dry-run", "-n", action="store_true", help="Preview without executing")
 
     # setup
     p_setup = subparsers.add_parser(
@@ -594,6 +634,9 @@ def main():
             "logs": vpm.cmd_logs,
             "retry": vpm.cmd_retry,
             "reset": vpm.cmd_reset,
+            "audit": vpm.cmd_audit,
+            "rollback": vpm.cmd_rollback,
+            "run": vpm.cmd_run,
             "setup": vpm.cmd_setup,
             "doctor": vpm.cmd_doctor,
             "completions": vpm.cmd_completions,

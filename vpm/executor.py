@@ -155,6 +155,7 @@ class Executor:
                         label=step_def["label"],
                         command=step_def["command"],
                         command_hash=self.compute_command_hash(step_def["command"]),
+                        rollback_command=step_def.get("rollback"),
                     )
                 )
             record = AppRecord(
@@ -349,6 +350,106 @@ class Executor:
                 f"[ERROR] Step {step.index + 1}: {step.label} — {e}\n"
             )
             return False
+
+    def rollback_app(self, record: AppRecord, dry_run: bool = False) -> AppRecord:
+        """Run rollback commands in reverse order for succeeded steps."""
+        now = datetime.datetime.now()
+        app_log_dir = self.config.get_app_log_dir(record.name)
+
+        rollback_steps = [
+            s for s in reversed(record.steps)
+            if s.status == StepStatus.SUCCESS.value and s.rollback_command
+        ]
+
+        if not rollback_steps:
+            UI.warning("No steps to rollback (no succeeded steps with rollback commands).")
+            no_rollback = [
+                s for s in record.steps
+                if s.status == StepStatus.SUCCESS.value and not s.rollback_command
+            ]
+            if no_rollback:
+                UI.dim(f"  {len(no_rollback)} succeeded step(s) have no rollback command defined.")
+            return record
+
+        UI.header(f"Rolling back: {record.display_name}", "⏪")
+        UI.info(f"Steps to rollback: {len(rollback_steps)}")
+
+        if dry_run:
+            for s in rollback_steps:
+                UI.step(s.index + 1, len(record.steps), f"[ROLLBACK] {s.label}")
+                UI.dim(f"  $ {s.rollback_command[:100]}")
+            return record
+
+        summary_log = app_log_dir / f"rollback_{now.strftime('%Y%m%d_%H%M%S')}.log"
+
+        with open(summary_log, "w") as summary_f:
+            summary_f.write(f"VPM Rollback Summary\n{'=' * 60}\n")
+            summary_f.write(f"App: {record.display_name}\nStarted: {now.isoformat()}\n")
+            summary_f.write(f"Steps to rollback: {len(rollback_steps)}\n{'=' * 60}\n\n")
+
+            for i, step in enumerate(rollback_steps):
+                UI.step(i + 1, len(rollback_steps), f"[ROLLBACK] {step.label}")
+                UI.dim(f"  $ {step.rollback_command[:100]}")
+
+                step.rollback_status = StepStatus.RUNNING.value
+                self.lock.set_app(record)
+
+                safe_label = re.sub(r"[^\w\-.]", "_", step.label)[:50]
+                rb_log = app_log_dir / f"rollback_{step.index:03d}_{safe_label}_{now.strftime('%H%M%S')}.log"
+                step.rollback_log_file = str(rb_log)
+
+                try:
+                    with open(rb_log, "w") as lf:
+                        lf.write(f"VPM Rollback Step Log\n{'─' * 60}\n")
+                        lf.write(f"Step: {step.index + 1} — {step.label}\n")
+                        lf.write(f"Rollback command:\n{step.rollback_command}\n{'─' * 60}\n\n")
+                        lf.flush()
+
+                        shell = os.environ.get("SHELL", "/bin/bash")
+                        if "bash" not in shell and "zsh" not in shell:
+                            shell = "/bin/bash"
+
+                        exit_code = self._pty_exec(
+                            shell_path=shell,
+                            command=step.rollback_command,
+                            env=os.environ.copy(),
+                            log_fh=lf,
+                        )
+
+                        if exit_code == 0:
+                            step.rollback_status = StepStatus.SUCCESS.value
+                            UI.success("Rolled back")
+                            summary_f.write(f"[OK] Rollback step {step.index + 1}: {step.label}\n")
+                        else:
+                            step.rollback_status = StepStatus.FAILED.value
+                            UI.error(f"Rollback failed (exit {exit_code})")
+                            summary_f.write(f"[FAIL] Rollback step {step.index + 1}: {step.label} (exit={exit_code})\n")
+
+                except OSError as e:
+                    step.rollback_status = StepStatus.FAILED.value
+                    UI.error(f"Rollback error: {e}")
+                    summary_f.write(f"[ERROR] Rollback step {step.index + 1}: {step.label} — {e}\n")
+
+                self.lock.set_app(record)
+
+            end_time = datetime.datetime.now()
+            summary_f.write(f"\n{'=' * 60}\nFinished: {end_time.isoformat()}\n")
+            summary_f.write(f"Duration: {(end_time - now).total_seconds():.1f}s\n{'=' * 60}\n")
+
+        record.status = AppStatus.ROLLED_BACK.value
+        self.lock.set_app(record)
+
+        rb_ok = sum(1 for s in rollback_steps if s.rollback_status == StepStatus.SUCCESS.value)
+        rb_fail = sum(1 for s in rollback_steps if s.rollback_status == StepStatus.FAILED.value)
+
+        print()
+        if rb_fail == 0:
+            UI.success(f"Rollback complete: {rb_ok}/{len(rollback_steps)} steps rolled back.")
+        else:
+            UI.warning(f"Rollback partial: {rb_ok} succeeded, {rb_fail} failed.")
+        UI.dim(f"Log: {summary_log}")
+
+        return record
 
     def _pty_exec(
         self,

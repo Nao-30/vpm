@@ -1,0 +1,78 @@
+# ═══════════════════════════════════════════════════════
+# VPM Manifest: Node.js Server with PM2 & Nginx
+# Target OS: Ubuntu 22.04+ / Debian 12+
+# ═══════════════════════════════════════════════════════
+#
+# Usage:
+#   vpm install --file node-server.yaml
+#
+# After installation:
+#   - Configure your Nginx server block in /etc/nginx/sites-available/
+#   - Deploy your Node.js app to $HOME/apps/
+#
+
+[node_js] Node.js via NVM
+- label: Install NVM
+  run: |
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+  rollback: rm -rf $HOME/.nvm
+
+- label: Install Node.js LTS
+  run: |
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+    nvm install --lts
+    nvm alias default node
+
+- label: Verify Node.js
+  run: |
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+    node --version
+    npm --version
+
+[pm2] PM2 Process Manager
+requires: node_js
+
+- label: Install PM2 globally
+  run: |
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+    npm install -g pm2
+  rollback: |
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+    npm uninstall -g pm2
+
+- label: Setup PM2 startup script
+  run: |
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+    pm2 startup | tail -1 | bash
+
+- label: Verify PM2
+  run: |
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+    pm2 --version
+
+[nginx_reverse_proxy] Nginx as Reverse Proxy
+- label: Install Nginx
+  run: sudo apt-get update -y && sudo apt-get install -y nginx
+  rollback: sudo apt-get remove -y nginx
+
+- label: Enable and start Nginx
+  run: |
+    sudo systemctl enable nginx
+    sudo systemctl start nginx
+    sudo systemctl status nginx --no-pager
+  rollback: |
+    sudo systemctl stop nginx
+    sudo systemctl disable nginx
+
+- label: Verify Nginx
+  run: |
+    nginx -v
+    curl -sf http://localhost > /dev/null && echo "Nginx responding on port 80"
