@@ -8,3 +8,5 @@ dist/
 *.kate-swp
 .kiro/
 .venv/
+docs/plans/
+docs/specs/
