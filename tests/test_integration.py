@@ -50,6 +50,34 @@ def workspace(tmp_path):
 
 
 class TestInstall:
+    def test_all_steps_share_one_pty_without_sharing_shell_state(self, tmp_path):
+        first_terminal = tmp_path / "first-terminal.txt"
+        second_terminal = tmp_path / "second-terminal.txt"
+        manifest = tmp_path / "vpm-manifest.yaml"
+        manifest.write_text(
+            "[first_app]\n"
+            "- label: Record terminal and set temporary shell state\n"
+            f"  run: printf '%s %s\\n' \"$(tty)\" \"$(ps -o sid= -p $$)\" > {first_terminal} && export VPM_STEP_LOCAL=present\n"
+            "\n"
+            "[second_app]\n"
+            "requires: first_app\n"
+            "- label: Verify terminal reuse and shell isolation\n"
+            f"  run: printf '%s %s\\n' \"$(tty)\" \"$(ps -o sid= -p $$)\" > {second_terminal} && test -z \"${{VPM_STEP_LOCAL:-}}\"\n"
+        )
+
+        rc, out = run_vpm(
+            "install",
+            "--file",
+            str(manifest),
+            "--yes",
+            "--skip-security",
+            env=_env(tmp_path),
+            cwd=str(tmp_path),
+        )
+
+        assert rc == 0, f"Install failed:\n{out}"
+        assert first_terminal.read_text() == second_terminal.read_text()
+
     def test_install_creates_lock_file(self, workspace):
         ws, env = workspace
         rc, out = run_vpm("install", "--file", str(ws / "vpm-manifest.yaml"), "--yes", "--skip-security", env=env, cwd=str(ws))

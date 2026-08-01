@@ -6,10 +6,18 @@
 
 VPM uses pseudo-terminal (PTY) execution rather than simple `subprocess.PIPE`. This means:
 
+- One PTY and terminal session are reused for the entire VPM command. On systems
+  with sudo's default per-terminal credential cache, authenticating in one step
+  avoids another prompt in later steps until the configured sudo timeout expires.
 - The child process sees a real terminal (as if you typed the command yourself).
 - Interactive programs work: `debconf` configuration screens, `ncurses` dialogs, `sudo` password prompts, `less`/`more` pagers, progress bars, colored output.
 - Your keystrokes (arrows, tab, enter) are forwarded to the child process.
 - All output is simultaneously displayed in your terminal AND written to the log file.
+
+Each step still runs in a fresh shell. A step's `cd`, shell variables, aliases,
+and other transient shell state do not leak into the next step. VPM does not read,
+store, or extend the lifetime of sudo credentials; sudo remains responsible for
+authentication and its configured timeout.
 
 ### Interactive Programs
 

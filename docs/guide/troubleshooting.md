@@ -101,4 +101,4 @@ vpm/                    — Python package
 
 ---
 
-*VPM v1.1.0 — Built for humans who manage servers, and the AI agents who help them.*
+*VPM — Built for humans who manage servers, and the AI agents who help them.*
