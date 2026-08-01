@@ -53,17 +53,40 @@ class TestInstall:
     def test_all_steps_share_one_pty_without_sharing_shell_state(self, tmp_path):
         first_terminal = tmp_path / "first-terminal.txt"
         second_terminal = tmp_path / "second-terminal.txt"
+        sudo_cache = tmp_path / "sudo-cache.txt"
+        sudo_prompts = tmp_path / "sudo-prompts.txt"
+        shell_env = tmp_path / "shell-env.sh"
+        shell_env.write_text(
+            "sudo() {\n"
+            "key=\"$(tty):$(ps -o sid= -p $$ | tr -d ' ')\"\n"
+            "if [ ! -f \"$VPM_FAKE_SUDO_CACHE\" ] || "
+            "[ \"$(head -n 1 \"$VPM_FAKE_SUDO_CACHE\")\" != \"$key\" ]; then\n"
+            "  printf '%s\\n' \"$key\" > \"$VPM_FAKE_SUDO_CACHE\"\n"
+            "  printf 'prompt\\n' >> \"$VPM_FAKE_SUDO_PROMPTS\"\n"
+            "fi\n"
+            "command \"$@\"\n"
+            "}\n"
+        )
         manifest = tmp_path / "vpm-manifest.yaml"
         manifest.write_text(
             "[first_app]\n"
             "- label: Record terminal and set temporary shell state\n"
-            f"  run: printf '%s %s\\n' \"$(tty)\" \"$(ps -o sid= -p $$)\" > {first_terminal} && export VPM_STEP_LOCAL=present\n"
+            f"  run: sudo true && printf '%s %s\\n' \"$(tty)\" \"$(ps -o sid= -p $$)\" > {first_terminal} && export VPM_STEP_LOCAL=present\n"
+            "\n"
+            "- label: Verify terminal record\n"
+            f"  run: test -s {first_terminal}\n"
             "\n"
             "[second_app]\n"
             "requires: first_app\n"
             "- label: Verify terminal reuse and shell isolation\n"
-            f"  run: printf '%s %s\\n' \"$(tty)\" \"$(ps -o sid= -p $$)\" > {second_terminal} && test -z \"${{VPM_STEP_LOCAL:-}}\"\n"
+            f"  run: sudo true && printf '%s %s\\n' \"$(tty)\" \"$(ps -o sid= -p $$)\" > {second_terminal} && test -z \"${{VPM_STEP_LOCAL:-}}\"\n"
         )
+
+        env = _env(tmp_path)
+        env["SHELL"] = "/bin/bash"
+        env["BASH_ENV"] = str(shell_env)
+        env["VPM_FAKE_SUDO_CACHE"] = str(sudo_cache)
+        env["VPM_FAKE_SUDO_PROMPTS"] = str(sudo_prompts)
 
         rc, out = run_vpm(
             "install",
@@ -71,12 +94,13 @@ class TestInstall:
             str(manifest),
             "--yes",
             "--skip-security",
-            env=_env(tmp_path),
+            env=env,
             cwd=str(tmp_path),
         )
 
         assert rc == 0, f"Install failed:\n{out}"
         assert first_terminal.read_text() == second_terminal.read_text()
+        assert sudo_prompts.read_text().splitlines() == ["prompt"]
 
     def test_install_creates_lock_file(self, workspace):
         ws, env = workspace

@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Repeated sudo password prompts between steps when sudo uses its default per-terminal credential cache
 - Existing Pyright error in file-size formatting
 - Stale version metadata in remote request headers and troubleshooting documentation
+- CI lint behavior drifting when Ruff changes its implicit default rule set
+- Release tags publishing without first re-running lint and tests
 
 ## [1.2.2] - 2026-04-22
 

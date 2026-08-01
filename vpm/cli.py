@@ -663,4 +663,4 @@ def main():
         sys.exit(1)
     finally:
         if vpm is not None:
-            vpm.executor.close()
+            vpm.close()
