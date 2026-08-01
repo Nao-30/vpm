@@ -59,3 +59,11 @@ Open an issue with:
 - What actually happened
 - Your OS and Python version (`vpm version` output)
 - Relevant log output (`vpm logs <app> --latest`)
+
+## Releasing
+
+Merging to `main` runs CI but does not publish a package. After CI succeeds,
+create and push a tag matching the version in `pyproject.toml` and
+`vpm/__init__.py` (for example, `v1.2.3`). The tag workflow re-runs syntax,
+lint, and test verification before building and publishing to PyPI and creating
+the matching GitHub release.

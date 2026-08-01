@@ -31,6 +31,10 @@ class VPM:
         self.lock = LockFile(self.config)
         self.executor = Executor(self.config, self.lock)
 
+    def close(self) -> None:
+        """Release command-execution resources owned by this application."""
+        self.executor.close()
+
     # ── INIT ──────────────────────────────────────────────────────────────
 
     def cmd_init(self, args):
