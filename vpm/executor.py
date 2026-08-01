@@ -1,7 +1,7 @@
 """PTY-based command executor with full logging and tracking."""
 
 import datetime
-import errno
+import fcntl
 import hashlib
 import os
 import platform
@@ -9,8 +9,12 @@ import pty
 import re
 import select
 import signal
+import struct
 import sys
+import termios
+import tty
 from pathlib import Path
+from typing import TextIO
 
 from .config import Config
 from .lockfile import LockFile
@@ -20,6 +24,199 @@ from .style import Style
 from .ui import UI
 
 
+class _PtySession:
+    """One controlling terminal shared by isolated command shells."""
+
+    def __init__(self, shell_path: str, env: dict[str, str]):
+        master_fd, slave_fd = pty.openpty()
+        terminal_attrs = termios.tcgetattr(slave_fd)
+        command_read_fd, self._command_fd = os.pipe()
+        self._result_fd, result_write_fd = os.pipe()
+
+        pid = os.fork()
+        if pid == 0:
+            os.close(master_fd)
+            os.close(self._command_fd)
+            os.close(self._result_fd)
+            self._serve(
+                slave_fd,
+                command_read_fd,
+                result_write_fd,
+                shell_path,
+                env,
+            )
+
+        os.close(slave_fd)
+        os.close(command_read_fd)
+        os.close(result_write_fd)
+        self._master_fd = master_fd
+        self._terminal_attrs = terminal_attrs
+        self._pid = pid
+        self._closed = False
+
+    @staticmethod
+    def _read_exact(fd: int, size: int) -> bytes:
+        chunks = bytearray()
+        while len(chunks) < size:
+            chunk = os.read(fd, size - len(chunks))
+            if not chunk:
+                break
+            chunks.extend(chunk)
+        return bytes(chunks)
+
+    @classmethod
+    def _serve(
+        cls,
+        slave_fd: int,
+        command_fd: int,
+        result_fd: int,
+        shell_path: str,
+        env: dict[str, str],
+    ) -> None:
+        """Run as the PTY's session leader and launch one shell per request."""
+        try:
+            os.setsid()
+            fcntl.ioctl(slave_fd, termios.TIOCSCTTY, 0)
+            os.dup2(slave_fd, 0)
+            os.dup2(slave_fd, 1)
+            os.dup2(slave_fd, 2)
+            if slave_fd > 2:
+                os.close(slave_fd)
+
+            # Commands must receive terminal signals; the session leader must
+            # survive them so later VPM steps keep the same sudo context.
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+
+            while True:
+                header = cls._read_exact(command_fd, 8)
+                if not header:
+                    break
+                if len(header) != 8:
+                    os._exit(126)
+                command_size = struct.unpack("!Q", header)[0]
+                command_bytes = cls._read_exact(command_fd, command_size)
+                if len(command_bytes) != command_size:
+                    os._exit(126)
+
+                command_pid = os.fork()
+                if command_pid == 0:
+                    os.close(command_fd)
+                    os.close(result_fd)
+                    signal.signal(signal.SIGINT, signal.SIG_DFL)
+                    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+                    os.execve(
+                        shell_path,
+                        [shell_path, "-e", "-c", command_bytes.decode("utf-8")],
+                        env,
+                    )
+                    os._exit(127)
+
+                _, status = os.waitpid(command_pid, 0)
+                if os.WIFEXITED(status):
+                    exit_code = os.WEXITSTATUS(status)
+                elif os.WIFSIGNALED(status):
+                    exit_code = 128 + os.WTERMSIG(status)
+                else:
+                    exit_code = 1
+                os.write(result_fd, struct.pack("!I", exit_code))
+        except BaseException:
+            os._exit(126)
+        finally:
+            os._exit(0)
+
+    def execute(self, command: str, log_fh: TextIO) -> int:
+        if self._closed:
+            raise OSError("PTY session is closed")
+
+        # A badly behaved interactive program must not leave echo, canonical
+        # input, or signal processing disabled for the next manifest step.
+        termios.tcsetattr(self._master_fd, termios.TCSANOW, self._terminal_attrs)
+
+        stdin_fd = sys.stdin.fileno()
+        stdin_is_tty = os.isatty(stdin_fd)
+        old_tattr = None
+
+        if stdin_is_tty:
+            try:
+                window_size = fcntl.ioctl(stdin_fd, termios.TIOCGWINSZ, b"\0" * 8)
+                fcntl.ioctl(self._master_fd, termios.TIOCSWINSZ, window_size)
+                old_tattr = termios.tcgetattr(stdin_fd)
+                tty.setraw(stdin_fd)
+            except termios.error:
+                old_tattr = None
+
+        try:
+            command_bytes = command.encode("utf-8")
+            os.write(self._command_fd, struct.pack("!Q", len(command_bytes)))
+            view = memoryview(command_bytes)
+            while view:
+                written = os.write(self._command_fd, view)
+                view = view[written:]
+            return self._copy_until_result(stdin_fd, stdin_is_tty, log_fh)
+        finally:
+            if old_tattr is not None:
+                try:
+                    termios.tcsetattr(stdin_fd, termios.TCSAFLUSH, old_tattr)
+                except termios.error:
+                    pass
+
+    def _copy_until_result(
+        self,
+        stdin_fd: int,
+        stdin_is_tty: bool,
+        log_fh: TextIO,
+    ) -> int:
+        fds = [self._master_fd, self._result_fd]
+        if stdin_is_tty:
+            fds.append(stdin_fd)
+        result = bytearray()
+
+        while len(result) < 4:
+            ready, _, _ = select.select(fds, [], [], 0.1)
+            if self._master_fd in ready:
+                self._copy_output(log_fh)
+            if self._result_fd in ready:
+                chunk = os.read(self._result_fd, 4 - len(result))
+                if not chunk:
+                    raise OSError("PTY session ended before the command completed")
+                result.extend(chunk)
+            if stdin_is_tty and stdin_fd in ready:
+                data = os.read(stdin_fd, 4096)
+                if data:
+                    os.write(self._master_fd, data)
+
+        # The exit status may reach us just before the PTY's last output.
+        while select.select([self._master_fd], [], [], 0.02)[0]:
+            self._copy_output(log_fh)
+        return struct.unpack("!I", result)[0]
+
+    def _copy_output(self, log_fh: TextIO) -> None:
+        data = os.read(self._master_fd, 4096)
+        if not data:
+            return
+        try:
+            os.write(sys.stdout.fileno(), data)
+        except OSError:
+            pass
+        try:
+            log_fh.write(data.decode("utf-8", errors="replace"))
+            log_fh.flush()
+        except (OSError, ValueError):
+            pass
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        os.close(self._command_fd)
+        try:
+            os.waitpid(self._pid, 0)
+        finally:
+            os.close(self._result_fd)
+            os.close(self._master_fd)
+
+
 class Executor:
     """Executes shell commands with full logging and tracking."""
 
@@ -27,6 +224,7 @@ class Executor:
         self.config = config
         self.lock = lock
         self._interrupted = False
+        self._pty_session: _PtySession | None = None
         signal.signal(signal.SIGINT, self._handle_interrupt)
         signal.signal(signal.SIGTERM, self._handle_interrupt)
 
@@ -374,8 +572,10 @@ class Executor:
 
         if dry_run:
             for s in rollback_steps:
+                rollback_command = s.rollback_command
+                assert rollback_command is not None
                 UI.step(s.index + 1, len(record.steps), f"[ROLLBACK] {s.label}")
-                UI.dim(f"  $ {s.rollback_command[:100]}")
+                UI.dim(f"  $ {rollback_command[:100]}")
             return record
 
         summary_log = app_log_dir / f"rollback_{now.strftime('%Y%m%d_%H%M%S')}.log"
@@ -386,8 +586,10 @@ class Executor:
             summary_f.write(f"Steps to rollback: {len(rollback_steps)}\n{'=' * 60}\n\n")
 
             for i, step in enumerate(rollback_steps):
+                rollback_command = step.rollback_command
+                assert rollback_command is not None
                 UI.step(i + 1, len(rollback_steps), f"[ROLLBACK] {step.label}")
-                UI.dim(f"  $ {step.rollback_command[:100]}")
+                UI.dim(f"  $ {rollback_command[:100]}")
 
                 step.rollback_status = StepStatus.RUNNING.value
                 self.lock.set_app(record)
@@ -400,7 +602,7 @@ class Executor:
                     with open(rb_log, "w") as lf:
                         lf.write(f"VPM Rollback Step Log\n{'─' * 60}\n")
                         lf.write(f"Step: {step.index + 1} — {step.label}\n")
-                        lf.write(f"Rollback command:\n{step.rollback_command}\n{'─' * 60}\n\n")
+                        lf.write(f"Rollback command:\n{rollback_command}\n{'─' * 60}\n\n")
                         lf.flush()
 
                         shell = os.environ.get("SHELL", "/bin/bash")
@@ -409,7 +611,7 @@ class Executor:
 
                         exit_code = self._pty_exec(
                             shell_path=shell,
-                            command=step.rollback_command,
+                            command=rollback_command,
                             env=os.environ.copy(),
                             log_fh=lf,
                         )
@@ -456,130 +658,13 @@ class Executor:
         env: dict[str, str],
         log_fh,
     ) -> int:
-        """
-        Execute a command inside a PTY so interactive programs (debconf,
-        ncurses config screens, sudo password prompts, etc.) work correctly.
+        """Execute a command in the run's shared PTY session."""
+        if self._pty_session is None:
+            self._pty_session = _PtySession(shell_path, env)
+        return self._pty_session.execute(command, log_fh)
 
-        stdin/stdout of the real terminal are wired through to the child.
-        All output is also tee'd into log_fh.
-        """
-        # Create PTY pair
-        master_fd, slave_fd = pty.openpty()
-
-        pid = os.fork()
-        if pid == 0:
-            # ── CHILD ────────────────────────────────────────────────
-            os.close(master_fd)
-            # Create a new session and set the slave as controlling terminal
-            os.setsid()
-            import fcntl
-            import termios
-            fcntl.ioctl(slave_fd, termios.TIOCSCTTY, 0)
-
-            # Redirect stdin/stdout/stderr to the slave PTY
-            os.dup2(slave_fd, 0)
-            os.dup2(slave_fd, 1)
-            os.dup2(slave_fd, 2)
-            if slave_fd > 2:
-                os.close(slave_fd)
-
-            os.execve(
-                shell_path,
-                [shell_path, "-e", "-c", command],
-                env,
-            )
-            # execve never returns on success
-            os._exit(127)
-
-        # ── PARENT ────────────────────────────────────────────────────
-        os.close(slave_fd)
-
-        # If our stdin is a TTY, put it in raw mode so keystrokes
-        # (arrow keys, tab, etc.) reach the child unmodified.
-        stdin_fd = sys.stdin.fileno()
-        stdin_is_tty = os.isatty(stdin_fd)
-        old_tattr = None
-
-        if stdin_is_tty:
-            import termios
-            import tty
-            try:
-                old_tattr = termios.tcgetattr(stdin_fd)
-                tty.setraw(stdin_fd)
-            except termios.error:
-                old_tattr = None
-
-        try:
-            self._pty_copy_loop(master_fd, stdin_fd, stdin_is_tty, log_fh)
-        finally:
-            # Restore terminal no matter what
-            if old_tattr is not None:
-                import termios
-                try:
-                    termios.tcsetattr(stdin_fd, termios.TCSAFLUSH, old_tattr)
-                except termios.error:
-                    pass
-            os.close(master_fd)
-
-        # Reap child
-        _, status = os.waitpid(pid, 0)
-        if os.WIFEXITED(status):
-            return os.WEXITSTATUS(status)
-        elif os.WIFSIGNALED(status):
-            return 128 + os.WTERMSIG(status)
-        return 1
-
-    def _pty_copy_loop(
-        self,
-        master_fd: int,
-        stdin_fd: int,
-        stdin_is_tty: bool,
-        log_fh,
-    ):
-        """
-        Bidirectional copy between the real terminal and the PTY master.
-        Also writes child output to the log file.
-        """
-        fds = [master_fd]
-        if stdin_is_tty:
-            fds.append(stdin_fd)
-
-        while True:
-            try:
-                rfds, _, _ = select.select(fds, [], [], 0.1)
-            except (select.error, ValueError):
-                break
-
-            if master_fd in rfds:
-                try:
-                    data = os.read(master_fd, 4096)
-                except OSError as e:
-                    if e.errno == errno.EIO:
-                        # Child closed its side — normal at exit
-                        break
-                    raise
-                if not data:
-                    break
-                # Write to real stdout (user sees interactive output)
-                try:
-                    os.write(sys.stdout.fileno(), data)
-                except OSError:
-                    pass
-                # Tee to log file (strip ANSI later if needed, but keep raw for now)
-                try:
-                    log_fh.write(data.decode("utf-8", errors="replace"))
-                    log_fh.flush()
-                except (OSError, ValueError):
-                    pass
-
-            if stdin_is_tty and stdin_fd in rfds:
-                try:
-                    data = os.read(stdin_fd, 4096)
-                except OSError:
-                    break
-                if not data:
-                    break
-                try:
-                    os.write(master_fd, data)
-                except OSError:
-                    break
+    def close(self) -> None:
+        """Close the shared PTY session after the current VPM command."""
+        if self._pty_session is not None:
+            self._pty_session.close()
+            self._pty_session = None

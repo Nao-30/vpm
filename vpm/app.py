@@ -11,6 +11,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from . import __version__
 from .config import Config
 from .executor import Executor
 from .lockfile import LockFile
@@ -473,11 +474,12 @@ class VPM:
 
     @staticmethod
     def _format_size(size: int) -> str:
+        display_size = float(size)
         for unit in ["B", "KB", "MB", "GB"]:
-            if size < 1024:
-                return f"{size:.1f}{unit}"
-            size /= 1024
-        return f"{size:.1f}TB"
+            if display_size < 1024:
+                return f"{display_size:.1f}{unit}"
+            display_size /= 1024
+        return f"{display_size:.1f}TB"
 
     # ── RETRY ─────────────────────────────────────────────────────────────
 
@@ -689,7 +691,9 @@ class VPM:
 
         UI.info(f"Fetching: {url}")
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "vpm/1.1.0"})
+            req = urllib.request.Request(
+                url, headers={"User-Agent": f"vpm/{__version__}"}
+            )
             with urllib.request.urlopen(req, timeout=30) as resp:
                 content = resp.read().decode("utf-8")
         except urllib.error.HTTPError as e:
@@ -697,7 +701,9 @@ class VPM:
                 url = url.replace("/main/", "/master/")
                 UI.dim("  main not found, trying master...")
                 try:
-                    req = urllib.request.Request(url, headers={"User-Agent": "vpm/1.1.0"})
+                    req = urllib.request.Request(
+                        url, headers={"User-Agent": f"vpm/{__version__}"}
+                    )
                     with urllib.request.urlopen(req, timeout=30) as resp:
                         content = resp.read().decode("utf-8")
                 except Exception as e2:

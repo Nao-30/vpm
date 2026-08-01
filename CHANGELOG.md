@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-08-01
+
+### Changed
+- Reuse one PTY and terminal session for the entire VPM command while keeping each manifest step in an isolated shell
+- Restore PTY state between steps and close the shared session cleanly when the command finishes
+
+### Fixed
+- Repeated sudo password prompts between steps when sudo uses its default per-terminal credential cache
+- Existing Pyright error in file-size formatting
+- Stale version metadata in remote request headers and troubleshooting documentation
+
+## [1.2.2] - 2026-04-22
+
+### Fixed
+- Show a success message when an audit has findings below the configured display threshold
+
+## [1.2.1] - 2026-04-22
+
+### Fixed
+- Use an absolute README logo URL so the image renders correctly on PyPI
+
 ## [1.2.0] - 2026-04-22
 
 ### Added
@@ -54,7 +75,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `vpm init` manifest template generator
 - `vpm setup` for PATH installation (user and global)
 
-[Unreleased]: https://github.com/Nao-30/vpm/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/Nao-30/vpm/compare/v1.2.3...HEAD
+[1.2.3]: https://github.com/Nao-30/vpm/compare/v1.2.2...v1.2.3
+[1.2.2]: https://github.com/Nao-30/vpm/compare/v1.2.1...v1.2.2
+[1.2.1]: https://github.com/Nao-30/vpm/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/Nao-30/vpm/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Nao-30/vpm/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Nao-30/vpm/releases/tag/v1.0.0

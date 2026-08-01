@@ -623,6 +623,7 @@ def main():
         parser.print_help()
         sys.exit(0)
 
+    vpm = None
     try:
         vpm = _VPMExtended()
 
@@ -660,3 +661,6 @@ def main():
         UI.dim(traceback.format_exc())
         UI.info("Run 'vpm doctor' to diagnose issues.")
         sys.exit(1)
+    finally:
+        if vpm is not None:
+            vpm.executor.close()
